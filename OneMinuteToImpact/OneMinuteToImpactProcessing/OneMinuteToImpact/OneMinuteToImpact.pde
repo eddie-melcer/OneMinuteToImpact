@@ -39,7 +39,7 @@ boolean warning;
 Player p1, p2;
 
 // Debugging
-boolean Debug = false;
+boolean Debug = true;
 
 int fall=0;
 float exp = .001;
@@ -237,8 +237,16 @@ void setupPlayers(){
 
 void randomPlayerPlacement(){
   // Random X for left and right players with a padding in the center to prevent immediate fighting
-  p1.X = (int)random(FieldWidth/2 - MinimumCenterSpacing);
-  p2.X = FieldWidth/2 + MinimumCenterSpacing + (int)random(FieldWidth/2 - MinimumCenterSpacing);
+  int x1 = (int)random(FieldWidth/2 - MinimumCenterSpacing);
+  int x2 = FieldWidth/2 + MinimumCenterSpacing + (int)random(FieldWidth/2 - MinimumCenterSpacing);
+  
+  if((int)random(2) == 0){
+    p1.X = x1;
+    p2.X = x2;
+  }else{
+    p1.X = x2;
+    p2.X = x1;    
+  }
 }
 
 void endFight(){
