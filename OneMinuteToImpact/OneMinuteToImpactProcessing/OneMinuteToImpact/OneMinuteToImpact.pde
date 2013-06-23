@@ -5,17 +5,6 @@ import ddf.minim.*;
 
 // Serial Related Variables
 Serial myPort;
-final int Delimiter = 33;
-final int NumberArduinoValues = 7;
-final int StartButtonIndex = 0;
-final int Strap1Index = 1;
-final int Strap2Index = 2;
-final int LeftIR1Index = 3;
-final int RightIR1Index = 4;
-final int LeftIR2Index = 5;
-final int RightIR2Index = 6;
-final int High = 1;
-final int Low = 0;
 ArduinoData arduinoData;
 
 // Sound Related Variables
@@ -23,13 +12,6 @@ Minim minim;
 SoundManager soundManager;
 
 // Game Related Variables
-final int RoundTime = 60 * 1000;
-final int WarningTime = 10 * 1000;
-final int FieldWidth = 1024;
-final int MaxPlayerMovementSpeed = 3;
-final int MinimumCenterSpacing = 64;
-final int BattleThreshold = 128;
-final int BeaconFrequency = 120;
 GameState currentGameState;
 int roundStartTime;
 int timeSinceLastBeacon;
@@ -85,9 +67,8 @@ void draw(){
     // Read in new data if avaliable
     if (myPort.available() > 0) {
       // read string and store it in arduinoString
-      String arduinoString = myPort.readStringUntil(Delimiter);
+      String arduinoString = myPort.readStringUntil(GameHelper.Delimiter);
       // Make sure that the read succeeded
-
 
       if(arduinoString != null && arduinoString.length() ==22){
         println(arduinoString);
@@ -101,7 +82,7 @@ void draw(){
   // Manage Game States
   if(currentGameState == GameState.Waiting){
     // Are we starting a new game? Setup players and start countdown.
-    if(arduinoData.StartButtonValue == High && !soundManager.IsPlayingCountdown()){
+    if(arduinoData.StartButtonValue == GameHelper.High && !soundManager.IsPlayingCountdown()){
       setupPlayers();
       soundManager.PlayCountdown();
       starting = true;
@@ -124,25 +105,42 @@ void draw(){
     // Update Beacon Time and Play
     if(!fighting){
       timeSinceLastBeacon++;
-      if(timeSinceLastBeacon == BeaconFrequency/2){
+      if(timeSinceLastBeacon == GameHelper.BeaconFrequency/2){
         soundManager.PlayBeacon(p1.CalculateVolume(p2), p1.CalculatePan(p2));      
-      }else if(timeSinceLastBeacon >= BeaconFrequency){
+      }else if(timeSinceLastBeacon >= GameHelper.BeaconFrequency){
         soundManager.PlayBeacon(p1.CalculateVolume(p2), p1.CalculatePan(p2));
         timeSinceLastBeacon = 0;
       }
     }
     
-    if(abs(p1.X - p2.X) <= BattleThreshold && !fighting){
+    // Update Player Penalty if They Have One
+    if(p1.IsPenalized()){
+      p1.Penalty--;
+    }
+    if(p2.IsPenalized()){
+      p2.Penalty--;
+    }
+    
+    // Are We Close Enough to Fight
+    if(abs(p1.X - p2.X) <= GameHelper.BattleThreshold && !fighting){
+      // Check for cheating!!!
+      if(arduinoData.Strap1Value == GameHelper.High){
+        p1.Penalty = GameHelper.CheatingPenaltyTime;
+      }
+      if(arduinoData.Strap2Value == GameHelper.High){
+        p2.Penalty = GameHelper.CheatingPenaltyTime;
+      }
       soundManager.PlayFight();
       fighting = true;
-    }else if(abs(p1.X - p2.X) > BattleThreshold && fighting){
+    }else if(abs(p1.X - p2.X) > GameHelper.BattleThreshold && fighting){
       println("---------------------ESCAPE!!!!-------------------------");
       endFight();
     }
     
-    if(fighting && (arduinoData.Strap1Value == High || arduinoData.Strap2Value == High)){
-      if(!(arduinoData.Strap1Value == High && arduinoData.Strap2Value == High)){
-        if(arduinoData.Strap1Value == High){
+    if(fighting && ((arduinoData.Strap1Value == GameHelper.High && !p1.IsPenalized()) || (arduinoData.Strap2Value == GameHelper.High && !p2.IsPenalized()))){
+      // Make sure there is no tie
+      if(!((arduinoData.Strap1Value == GameHelper.High && !p1.IsPenalized()) && (arduinoData.Strap2Value == GameHelper.High && !p2.IsPenalized()))){
+        if(arduinoData.Strap1Value == GameHelper.High && !p1.IsPenalized()){
           p1.HasParachute = true;
           p2.HasParachute = false;
         }else{
@@ -162,14 +160,14 @@ void draw(){
       randomPlayerPlacement();
     }
     
-    if((millis() - roundStartTime) >= (RoundTime - WarningTime) && !warning){
+    if((millis() - roundStartTime) >= (GameHelper.RoundTime - GameHelper.WarningTime) && !warning){
       if(Debug)
         print("----------- WARNING ----------");
       soundManager.PlayWindRushing();
       warning = true;
     }
     
-    if((millis() - roundStartTime) >= RoundTime){
+    if((millis() - roundStartTime) >= GameHelper.RoundTime){
       warning = false;
       fighting = false;
       currentGameState = GameState.Victory;
@@ -189,24 +187,24 @@ void draw(){
 void keyPressed(){
   if(Debug){
     if(key == 'd' || key == 'D')arduinoData.RightIR1Value = 255;
-    if(key == 's' || key == 'S')arduinoData.Strap1Value = High;
+    if(key == 's' || key == 'S')arduinoData.Strap1Value = GameHelper.High;
     if(key == 'a' || key == 'A')arduinoData.LeftIR1Value = 255;
     if(key == 'j' || key == 'J')arduinoData.LeftIR2Value = 255;
-    if(key == 'k' || key == 'K')arduinoData.Strap2Value = High;
+    if(key == 'k' || key == 'K')arduinoData.Strap2Value = GameHelper.High;
     if(key == 'l' || key == 'L')arduinoData.RightIR2Value = 255;
-    if(key == ' ') arduinoData.StartButtonValue = High;
+    if(key == ' ') arduinoData.StartButtonValue = GameHelper.High;
   }
 }
 
 void keyReleased(){
   if(Debug){
-    if(key == 'd' || key == 'D')arduinoData.RightIR1Value = Low;
-    if(key == 's' || key == 'S')arduinoData.Strap1Value = Low;
-    if(key == 'a' || key == 'A')arduinoData.LeftIR1Value = Low;
-    if(key == 'j' || key == 'J')arduinoData.LeftIR2Value = Low;
-    if(key == 'k' || key == 'K')arduinoData.Strap2Value = Low;
-    if(key == 'l' || key == 'L')arduinoData.RightIR2Value = Low;
-    if(key == ' ') arduinoData.StartButtonValue = Low;
+    if(key == 'd' || key == 'D')arduinoData.RightIR1Value = GameHelper.Low;
+    if(key == 's' || key == 'S')arduinoData.Strap1Value = GameHelper.Low;
+    if(key == 'a' || key == 'A')arduinoData.LeftIR1Value = GameHelper.Low;
+    if(key == 'j' || key == 'J')arduinoData.LeftIR2Value = GameHelper.Low;
+    if(key == 'k' || key == 'K')arduinoData.Strap2Value = GameHelper.Low;
+    if(key == 'l' || key == 'L')arduinoData.RightIR2Value = GameHelper.Low;
+    if(key == ' ') arduinoData.StartButtonValue = GameHelper.Low;
   }
 }
 
@@ -237,8 +235,8 @@ void setupPlayers(){
 
 void randomPlayerPlacement(){
   // Random X for left and right players with a padding in the center to prevent immediate fighting
-  int x1 = (int)random(FieldWidth/2 - MinimumCenterSpacing);
-  int x2 = FieldWidth/2 + MinimumCenterSpacing + (int)random(FieldWidth/2 - MinimumCenterSpacing);
+  int x1 = (int)random(GameHelper.FieldWidth/2 - GameHelper.MinimumCenterSpacing);
+  int x2 = GameHelper.FieldWidth/2 + GameHelper.MinimumCenterSpacing + (int)random(GameHelper.FieldWidth/2 - GameHelper.MinimumCenterSpacing);
   
   if((int)random(2) == 0){
     p1.X = x1;
@@ -269,13 +267,13 @@ class ArduinoData {
     int[] splitValues = int(split(values, ","));
     
     // Store values from array into appropriate variables
-    StartButtonValue = splitValues[StartButtonIndex];
-    Strap1Value = splitValues[Strap1Index];
-    Strap2Value = splitValues[Strap2Index];
-    LeftIR1Value = splitValues[LeftIR1Index];
-    RightIR1Value = splitValues[RightIR1Index];
-    LeftIR2Value = splitValues[LeftIR2Index];
-    RightIR2Value = splitValues[RightIR2Index];
+    StartButtonValue = splitValues[GameHelper.StartButtonIndex];
+    Strap1Value = splitValues[GameHelper.Strap1Index];
+    Strap2Value = splitValues[GameHelper.Strap2Index];
+    LeftIR1Value = splitValues[GameHelper.LeftIR1Index];
+    RightIR1Value = splitValues[GameHelper.RightIR1Index];
+    LeftIR2Value = splitValues[GameHelper.LeftIR2Index];
+    RightIR2Value = splitValues[GameHelper.RightIR2Index];
   }
   
   void DisplayData(){
@@ -361,26 +359,31 @@ class SoundManager{
 class Player{
   float X;
   boolean HasParachute;
+  int Penalty;
   
   Player(){
-    
+    Penalty = 0;
   }
   
   void Move(int left, int right){
-    float value = map(right - left, -255, 255, -MaxPlayerMovementSpeed, MaxPlayerMovementSpeed);
+    float value = map(right - left, -255, 255, -GameHelper.MaxPlayerMovementSpeed, GameHelper.MaxPlayerMovementSpeed);
     if(value > 0 && !HasParachute)
       value += 1;
     else if(value < 0 && !HasParachute)
       value -= 1;
     X += value;
-    X = constrain(X, 0, FieldWidth);
+    X = constrain(X, 0, GameHelper.FieldWidth);
   }
   
   float CalculateVolume(Player p){
-    return (FieldWidth - abs(X - p.X))/FieldWidth;
+    return (GameHelper.FieldWidth - abs(X - p.X))/GameHelper.FieldWidth;
   }
   
   float CalculatePan(Player p){
-    return (-abs(X - p.X)*2)/FieldWidth;
+    return (-abs(X - p.X)*2)/GameHelper.FieldWidth;
+  }
+  
+  boolean IsPenalized(){
+    return Penalty > 0;
   }
 }
